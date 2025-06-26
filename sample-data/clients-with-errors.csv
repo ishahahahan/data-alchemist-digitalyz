@@ -1,0 +1,11 @@
+ClientID,ClientName,PriorityLevel,RequestedTaskIDs,GroupTag,AttributesJSON
+C001,Acme Corporation,5,"T001,T002",VIP,"{""industry"":""technology"",""size"":""large""}"
+C002,Beta Systems,4,"T002,T003",Premium,"{""industry"":""finance"",""size"":""medium""}"
+C003,Gamma Solutions,8,"T001,T004",Standard,"{""industry"":""healthcare"",""size"":""small""}"
+C001,Delta Enterprises,2,"T003,T005",Standard,invalid-json-here
+C005,Epsilon Tech,-1,"T004,T999",Basic,"{""industry"":""startup""}"
+C006,,3,"T001,T007",VIP,"{""industry"":""manufacturing""}"
+C007,Eta Consulting,4.5,"T002,T008",Premium,"{""industry"":""consulting""}"
+C008,Theta Corp,3,,Standard,"{""industry"":""education""}"
+C009,Iota Partners,2,"T006,T010",Standard,
+C010,Kappa Holdings,0,"T007,T011",Basic,"{""industry"":""real-estate""}"

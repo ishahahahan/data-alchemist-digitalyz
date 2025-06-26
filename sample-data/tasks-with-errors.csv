@@ -1,0 +1,13 @@
+TaskID,TaskName,Category,Duration,RequiredSkills,PreferredPhases,MaxConcurrent
+T001,Frontend Dashboard Development,Development,3,"JavaScript,React","[1,2]",2
+T002,Backend API Implementation,Development,0,"Python,Django","[2,3,4]",1
+T003,Database Design & Setup,Architecture,-1,"SQL,PostgreSQL","[1,2]",1
+T001,User Authentication System,Development,3,"MadeUpSkill,AnotherFakeSkill","[2,3]",2
+T005,,Development,2,"JavaScript,Node.js","invalid-range",1
+T006,Mobile App Development,Development,5,"React Native,TypeScript","[1,2,3]",15
+T007,Quality Assurance Testing,Testing,2,"JavaScript,Python","1-5-invalid",3
+T008,DevOps CI/CD Pipeline,DevOps,3,"Docker,AWS,Terraform","[3,4,5]",0
+T009,Data Analytics Dashboard,Analytics,4.5,"Python,SQL,React","",2
+T010,Security Audit,Security,2,"Python,SQL","[4,5]",-2
+T011,,Optimization,3,"JavaScript,Python,SQL","[3,4,5]",2
+T012,Documentation Writing,Documentation,1,,"[5]",4

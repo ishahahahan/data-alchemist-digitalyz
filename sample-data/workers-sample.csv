@@ -1,0 +1,16 @@
+WorkerID,WorkerName,Skills,AvailableSlots,MaxLoadPerPhase,WorkerGroup,QualificationLevel
+W001,Alice Johnson,"JavaScript,React,TypeScript,Node.js","[1,2,3,4]",3,Frontend,5
+W002,Bob Smith,"Python,Django,PostgreSQL,Docker","[2,3,4,5]",4,Backend,4
+W003,Carol Davis,"JavaScript,Python,SQL,Git","[1,3,5]",2,Fullstack,4
+W004,David Wilson,"Java,Spring,MySQL,Kubernetes","[1,2,4,5]",3,Backend,5
+W005,Eva Brown,"React,Vue.js,CSS,HTML","[2,3,4]",2,Frontend,3
+W006,Frank Miller,"Python,FastAPI,MongoDB,Redis","[1,4,5]",3,Backend,4
+W007,Grace Lee,"JavaScript,Angular,SCSS,Jest","[1,2,3]",2,Frontend,4
+W008,Henry Taylor,"C#,.NET,SQL Server,Azure","[3,4,5]",4,Backend,5
+W009,Iris Chen,"React,Node.js,GraphQL,AWS","[1,2,5]",3,Fullstack,5
+W010,Jack Anderson,"PHP,Laravel,MySQL,Linux","[2,4,5]",2,Backend,3
+W011,Kate Williams,"Vue.js,Nuxt.js,Tailwind,Figma","[1,3,4]",2,Frontend,3
+W012,Leo Martinez,"Go,Gin,PostgreSQL,Docker","[1,2,3,4,5]",4,Backend,4
+W013,Mia Rodriguez,"React Native,Expo,Firebase,TypeScript","[2,3]",2,Mobile,4
+W014,Nathan Garcia,"Flutter,Dart,SQLite,Git","[1,4,5]",3,Mobile,3
+W015,Olivia Thompson,"DevOps,AWS,Terraform,CI/CD","[3,4,5]",3,DevOps,5
