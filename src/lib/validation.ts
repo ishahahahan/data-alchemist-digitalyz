@@ -1,4 +1,4 @@
-import { Client, Worker, Task, ValidationResult, ValidationError } from '@/types';
+import { Client, Worker, Task, ValidationResult, ValidationError, GroupedValidationError } from '@/types';
 
 export class ValidationEngine {
   private clients: Client[] = [];
@@ -27,11 +27,56 @@ export class ValidationEngine {
     warnings.push(...this.validateSkillCoverage());
     warnings.push(...this.validateMaxConcurrencyFeasibility());
 
+    // Group errors by type
+    const groupedErrors = this.groupValidationErrors(errors);
+    const groupedWarnings = this.groupValidationErrors(warnings);
+
     return {
       isValid: errors.length === 0,
       errors,
       warnings,
+      groupedErrors,
+      groupedWarnings,
     };
+  }
+
+  // Group validation errors by type
+  private groupValidationErrors(validationErrors: ValidationError[]): GroupedValidationError[] {
+    const groupMap = new Map<string, GroupedValidationError>();
+
+    validationErrors.forEach(error => {
+      const key = error.type;
+      
+      if (groupMap.has(key)) {
+        const existing = groupMap.get(key)!;
+        existing.count += 1;
+        existing.affectedRows.push(...error.affectedRows);
+        existing.affectedColumns.push(...error.affectedColumns);
+        
+        // Add example details (limit to 3 examples)
+        if (existing.examples.length < 3 && error.details) {
+          existing.examples.push(error.details);
+        }
+      } else {
+        groupMap.set(key, {
+          type: error.type,
+          message: error.message,
+          severity: error.severity,
+          count: 1,
+          affectedRows: [...error.affectedRows],
+          affectedColumns: [...error.affectedColumns],
+          examples: error.details ? [error.details] : []
+        });
+      }
+    });
+
+    // Remove duplicates and sort arrays
+    groupMap.forEach(group => {
+      group.affectedRows = [...new Set(group.affectedRows)].sort((a, b) => a - b);
+      group.affectedColumns = [...new Set(group.affectedColumns)];
+    });
+
+    return Array.from(groupMap.values()).sort((a, b) => b.count - a.count);
   }
 
   // Validation Rule 1: Missing Required Columns
@@ -108,6 +153,7 @@ export class ValidationEngine {
         affectedRows,
         affectedColumns: ['ClientID'],
         severity: 'error',
+        details: `Found ${duplicateClientIDs.length} duplicate Client IDs. Each client must have a unique identifier.`
       });
     }
 

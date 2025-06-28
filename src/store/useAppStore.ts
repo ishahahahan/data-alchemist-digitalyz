@@ -6,16 +6,22 @@ interface AppStore extends AppState {
   setClientsData: (data: Client[]) => void;
   updateClientUploadState: (state: Partial<FileUploadState>) => void;
   updateClient: (index: number, client: Client) => void;
+  addClient: (client: Client) => void;
+  deleteClients: (clientIds: string[]) => void;
   
   // Actions for workers
   setWorkersData: (data: Worker[]) => void;
   updateWorkerUploadState: (state: Partial<FileUploadState>) => void;
   updateWorker: (index: number, worker: Worker) => void;
+  addWorker: (worker: Worker) => void;
+  deleteWorkers: (workerIds: string[]) => void;
   
   // Actions for tasks
   setTasksData: (data: Task[]) => void;
   updateTaskUploadState: (state: Partial<FileUploadState>) => void;
   updateTask: (index: number, task: Task) => void;
+  addTask: (task: Task) => void;
+  deleteTasks: (taskIds: string[]) => void;
   
   // Actions for rules
   addRule: (rule: BusinessRule) => void;
@@ -83,6 +89,16 @@ const useAppStore = create<AppStore>((set, get) => ({
       };
     }),
 
+  addClient: (client: Client) =>
+    set((state) => ({
+      clients: { ...state.clients, data: [...state.clients.data, client] },
+    })),
+
+  deleteClients: (clientIds: string[]) =>
+    set((state) => ({
+      clients: { ...state.clients, data: state.clients.data.filter(c => !clientIds.includes(c.ClientID)) },
+    })),
+
   // Worker actions
   setWorkersData: (data: Worker[]) =>
     set((state) => ({
@@ -106,6 +122,16 @@ const useAppStore = create<AppStore>((set, get) => ({
       };
     }),
 
+  addWorker: (worker: Worker) =>
+    set((state) => ({
+      workers: { ...state.workers, data: [...state.workers.data, worker] },
+    })),
+
+  deleteWorkers: (workerIds: string[]) =>
+    set((state) => ({
+      workers: { ...state.workers, data: state.workers.data.filter(w => !workerIds.includes(w.WorkerID)) },
+    })),
+
   // Task actions
   setTasksData: (data: Task[]) =>
     set((state) => ({
@@ -128,6 +154,16 @@ const useAppStore = create<AppStore>((set, get) => ({
         tasks: { ...state.tasks, data: newData },
       };
     }),
+
+  addTask: (task: Task) =>
+    set((state) => ({
+      tasks: { ...state.tasks, data: [...state.tasks.data, task] },
+    })),
+
+  deleteTasks: (taskIds: string[]) =>
+    set((state) => ({
+      tasks: { ...state.tasks, data: state.tasks.data.filter(t => !taskIds.includes(t.TaskID)) },
+    })),
 
   // Rule actions
   addRule: (rule: BusinessRule) =>
@@ -170,25 +206,47 @@ const useAppStore = create<AppStore>((set, get) => ({
     const state = get();
     const errors: any[] = [];
     const warnings: any[] = [];
+    const groupedErrors: any[] = [];
+    const groupedWarnings: any[] = [];
 
     // Combine all validation results
     if (state.clients.uploadState.validationResult) {
       errors.push(...state.clients.uploadState.validationResult.errors);
       warnings.push(...state.clients.uploadState.validationResult.warnings);
+      if (state.clients.uploadState.validationResult.groupedErrors) {
+        groupedErrors.push(...state.clients.uploadState.validationResult.groupedErrors);
+      }
+      if (state.clients.uploadState.validationResult.groupedWarnings) {
+        groupedWarnings.push(...state.clients.uploadState.validationResult.groupedWarnings);
+      }
     }
     if (state.workers.uploadState.validationResult) {
       errors.push(...state.workers.uploadState.validationResult.errors);
       warnings.push(...state.workers.uploadState.validationResult.warnings);
+      if (state.workers.uploadState.validationResult.groupedErrors) {
+        groupedErrors.push(...state.workers.uploadState.validationResult.groupedErrors);
+      }
+      if (state.workers.uploadState.validationResult.groupedWarnings) {
+        groupedWarnings.push(...state.workers.uploadState.validationResult.groupedWarnings);
+      }
     }
     if (state.tasks.uploadState.validationResult) {
       errors.push(...state.tasks.uploadState.validationResult.errors);
       warnings.push(...state.tasks.uploadState.validationResult.warnings);
+      if (state.tasks.uploadState.validationResult.groupedErrors) {
+        groupedErrors.push(...state.tasks.uploadState.validationResult.groupedErrors);
+      }
+      if (state.tasks.uploadState.validationResult.groupedWarnings) {
+        groupedWarnings.push(...state.tasks.uploadState.validationResult.groupedWarnings);
+      }
     }
 
     return {
       isValid: errors.length === 0,
       errors,
       warnings,
+      groupedErrors,
+      groupedWarnings,
     };
   },
 }));

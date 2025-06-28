@@ -5,7 +5,10 @@ import { useDropzone } from 'react-dropzone';
 import useAppStore from '@/store/useAppStore';
 import { FileProcessor } from '@/lib/fileProcessor';
 import { ValidationEngine } from '@/lib/validation';
+import { aiService } from '@/lib/aiService';
 import { FileType, Client, Worker, Task } from '@/types';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 interface FileUploadZoneProps {
   fileType: FileType;
@@ -15,6 +18,9 @@ interface FileUploadZoneProps {
 }
 
 function FileUploadZone({ fileType, title, description, icon }: FileUploadZoneProps) {
+  const [mappedHeaders, setMappedHeaders] = useState<Record<string, string> | null>(null);
+  const [isAIMapping, setIsAIMapping] = useState(false);
+  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
   const {
     clients,
     workers,
@@ -67,9 +73,80 @@ function FileUploadZone({ fileType, title, description, icon }: FileUploadZonePr
     });
 
     try {
-      // Process file
-      const result = await FileProcessor.processFile(file, fileType);
-      
+      // Process file to get headers
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      let headers: string[] = [];
+
+      if (fileExtension === 'csv') {
+        const result = await new Promise<{ meta: { fields: string[] } }>((resolve) => {
+          Papa.parse(file, {
+            header: true,
+            preview: 1,
+            complete: (result) => {
+              resolve(result as any);
+            },
+          });
+        });
+        headers = result.meta.fields;
+      } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const worksheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[worksheetName];
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        if (rawData.length > 0) {
+          headers = rawData[0] as string[];
+        }
+      }
+
+      const mapped = FileProcessor.getMappedHeaders(headers, fileType);
+      setDetectedHeaders(headers);
+      setMappedHeaders(mapped);
+
+      // Try AI-enhanced mapping if basic mapping has issues
+      const unmappedCount = Object.values(mapped).filter(v => v === null || v === '').length;
+      if (unmappedCount > 0) {
+        setIsAIMapping(true);
+        try {
+          const expectedHeaders = FileProcessor.getExpectedHeaders(fileType);
+          const aiMapping = await aiService.mapHeaders(headers, expectedHeaders, fileType);
+          
+          // Merge AI mapping with basic mapping, preferring AI where it provides better matches
+          const enhancedMapping = { ...mapped };
+          Object.keys(aiMapping).forEach(detectedHeader => {
+            if (aiMapping[detectedHeader] && aiMapping[detectedHeader] !== detectedHeader) {
+              enhancedMapping[detectedHeader] = aiMapping[detectedHeader];
+            }
+          });
+          
+          setMappedHeaders(enhancedMapping);
+        } catch (aiError) {
+          console.warn('AI header mapping failed, using basic mapping:', aiError);
+        } finally {
+          setIsAIMapping(false);
+        }
+      }
+
+    } catch (error) {
+      updateUploadState({
+        isProcessing: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  }, [fileType, updateUploadState]);
+
+  const onConfirmMapping = async () => {
+    if (!uploadState.file || !mappedHeaders) return;
+
+    updateUploadState({ isProcessing: true });
+
+    try {
+      // Process file with confirmed mapping
+      const result = await FileProcessor.processFile(
+        uploadState.file,
+        fileType
+      );
+
       if (result.errors.length > 0) {
         updateUploadState({
           isProcessing: false,
@@ -88,7 +165,7 @@ function FileUploadZone({ fileType, title, description, icon }: FileUploadZonePr
         fileType === 'workers' ? result.data as Worker[] : currentState.workers.data,
         fileType === 'tasks' ? result.data as Task[] : currentState.tasks.data
       );
-      
+
       const validationResult = validator.validateAll();
 
       updateUploadState({
@@ -97,13 +174,15 @@ function FileUploadZone({ fileType, title, description, icon }: FileUploadZonePr
         validationResult,
       });
 
+      setMappedHeaders(null); // Clear mapped headers after processing
+
     } catch (error) {
       updateUploadState({
         isProcessing: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       });
     }
-  }, [fileType, updateUploadState, setData]);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -124,7 +203,13 @@ function FileUploadZone({ fileType, title, description, icon }: FileUploadZonePr
       data: sampleData,
       isProcessing: false,
       error: null,
-      validationResult: { isValid: true, errors: [], warnings: [] },
+      validationResult: { 
+        isValid: true, 
+        errors: [], 
+        warnings: [], 
+        groupedErrors: [], 
+        groupedWarnings: [] 
+      },
     });
   };
 
@@ -167,6 +252,46 @@ function FileUploadZone({ fileType, title, description, icon }: FileUploadZonePr
           </div>
         )}
       </div>
+
+      {mappedHeaders && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+          <h4 className="text-md font-semibold text-gray-900 mb-2">Confirm Column Mapping</h4>
+          <div className="space-y-2">
+            {Object.entries(mappedHeaders).map(([original, mapped]) => (
+              <div key={original} className="grid grid-cols-2 gap-2 items-center">
+                <p className="text-sm font-medium text-gray-700">{original}</p>
+                <select
+                  value={mapped}
+                  onChange={(e) => {
+                    const newMappedHeaders = { ...mappedHeaders };
+                    newMappedHeaders[original] = e.target.value;
+                    setMappedHeaders(newMappedHeaders);
+                  }}
+                  className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                >
+                  {Object.keys(FileProcessor.getFileTypeSchema(fileType)).map((key) => (
+                    <option key={key} value={key}>{key}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <button
+              onClick={() => setMappedHeaders(null)}
+              className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirmMapping}
+              className="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      )}
 
       {uploadState.file && (
         <div className="mt-4 p-3 bg-gray-50 rounded-lg">

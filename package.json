@@ -12,6 +12,7 @@
     "@types/papaparse": "^5.3.16",
     "ag-grid-community": "^34.0.0",
     "ag-grid-react": "^34.0.0",
+    "fuzzball": "^2.2.2",
     "lucide-react": "^0.523.0",
     "next": "15.3.4",
     "openai": "^5.8.0",

@@ -36,12 +36,25 @@ export interface ValidationError {
   affectedRows: number[];
   affectedColumns: string[];
   severity: 'error' | 'warning';
+  details?: string; // Additional context for the error
+}
+
+export interface GroupedValidationError {
+  type: string;
+  message: string;
+  severity: 'error' | 'warning';
+  count: number;
+  affectedRows: number[];
+  affectedColumns: string[];
+  examples: string[]; // Sample error details
 }
 
 export interface ValidationResult {
   isValid: boolean;
   errors: ValidationError[];
   warnings: ValidationError[];
+  groupedErrors: GroupedValidationError[];
+  groupedWarnings: GroupedValidationError[];
 }
 
 // Business rules types
