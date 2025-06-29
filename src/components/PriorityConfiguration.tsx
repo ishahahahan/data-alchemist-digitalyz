@@ -151,7 +151,7 @@ export default function PriorityConfiguration() {
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <span className="mr-2">{isBalanced ? '✅' : '⚠️'}</span>
-            <span className="font-medium">
+            <span className="font-medium text-black">
               Total Weight: {(currentTotal * 100).toFixed(1)}%
             </span>
           </div>

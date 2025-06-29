@@ -423,7 +423,7 @@ export default function RuleBuilderSection() {
               <textarea
                 value={nlDescription}
                 onChange={(e) => setNlDescription(e.target.value)}
-                className="w-full h-32 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full h-32 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-black"
                 placeholder="Examples:&#10;• 'Tasks T001 and T002 must always run together'&#10;• 'Marketing team can only handle 3 tasks per phase'&#10;• 'High priority clients should get preference over low priority ones'&#10;• 'Worker W001 should never work on Category A tasks'"
               />
             </div>
