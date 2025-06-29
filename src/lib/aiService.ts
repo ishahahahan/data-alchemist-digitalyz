@@ -1,11 +1,25 @@
 import { Client, Worker, Task, BusinessRule } from '@/types';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Local AI Service - No external dependencies or API keys required
+// Gemini AI Service - Using Google's Generative AI for intelligent features
 
 export class AIService {
   private static instance: AIService;
+  private genAI: GoogleGenerativeAI | null;
+  private model: any;
   
-  private constructor() {}
+  private constructor() {
+    // Initialize Gemini AI
+    const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn('GEMINI_API_KEY not found. AI features will use fallback logic.');
+      this.genAI = null;
+      this.model = null;
+    } else {
+      this.genAI = new GoogleGenerativeAI(apiKey);
+      this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    }
+  }
   
   static getInstance(): AIService {
     if (!AIService.instance) {
@@ -14,7 +28,7 @@ export class AIService {
     return AIService.instance;
   }
 
-  // Natural Language Search Filtering using local pattern matching
+  // Natural Language Search Filtering using Gemini AI
   async searchData(
     query: string, 
     data: (Client | Worker | Task)[], 
@@ -23,19 +37,21 @@ export class AIService {
     if (!query.trim()) return data;
     
     try {
-      // Extract search patterns from natural language query
-      const patterns = this.extractSearchPatterns(query, dataType);
-      
-      // Apply pattern-based filters
-      return this.applyPatternFilters(data, patterns, dataType);
+      if (this.model) {
+        // Use Gemini AI for intelligent search
+        return await this.geminiSearch(query, data, dataType);
+      } else {
+        // Fallback to local pattern matching
+        return this.localSearch(query, data, dataType);
+      }
     } catch (error) {
-      console.error('Local AI search error:', error);
+      console.error('AI search error:', error);
       // Fallback to simple text search
       return this.simpleTextSearch(data, query);
     }
   }
 
-  // Error correction suggestions using predefined patterns
+  // Error correction suggestions using Gemini AI
   async suggestErrorCorrection(
     errorType: string,
     rowData: any,
@@ -43,10 +59,13 @@ export class AIService {
     currentValue: any
   ): Promise<{ suggestions: string[], explanation: string }> {
     try {
-      const suggestions = this.generateErrorSuggestions(errorType, fieldName, currentValue, rowData);
-      const explanation = this.getErrorExplanation(errorType, fieldName);
-      
-      return { suggestions, explanation };
+      if (this.model) {
+        // Use Gemini AI for intelligent error correction
+        return await this.geminiErrorCorrection(errorType, fieldName, currentValue, rowData);
+      } else {
+        // Fallback to local suggestions
+        return this.localErrorCorrection(errorType, fieldName, currentValue, rowData);
+      }
     } catch (error) {
       console.error('Error correction error:', error);
       return {
@@ -56,21 +75,19 @@ export class AIService {
     }
   }
 
-  // Natural Language Rule Creation using pattern recognition
+  // Natural Language Rule Creation using Gemini AI
   async createRuleFromNaturalLanguage(
     description: string,
     availableData: { clients: Client[], workers: Worker[], tasks: Task[] }
   ): Promise<{ rule: BusinessRule | null, explanation: string }> {
     try {
-      const rulePattern = this.analyzeRuleDescription(description);
-      const rule = this.createRuleFromPattern(rulePattern, availableData);
-      
-      return {
-        rule,
-        explanation: rule 
-          ? `Created ${rule.type} rule based on pattern recognition from: "${description}"`
-          : "Could not identify a clear rule pattern. Try phrases like 'tasks must run together', 'limit worker capacity', or 'client priority override'."
-      };
+      if (this.model) {
+        // Use Gemini AI for intelligent rule creation
+        return await this.geminiRuleCreation(description, availableData);
+      } else {
+        // Fallback to local pattern recognition
+        return this.localRuleCreation(description, availableData);
+      }
     } catch (error) {
       console.error('Rule creation error:', error);
       return {
@@ -80,20 +97,312 @@ export class AIService {
     }
   }
 
-  // Smart Header Mapping using fuzzy matching
+  // Smart Header Mapping using Gemini AI
   async mapHeaders(
     detectedHeaders: string[],
     expectedHeaders: string[],
     dataType: 'clients' | 'workers' | 'tasks'
   ): Promise<{ [key: string]: string }> {
     try {
-      // Use enhanced fuzzy matching with domain knowledge
-      return this.intelligentHeaderMapping(detectedHeaders, expectedHeaders, dataType);
+      if (this.model && detectedHeaders.length > 0) {
+        // Use Gemini AI for intelligent header mapping
+        return await this.geminiHeaderMapping(detectedHeaders, expectedHeaders, dataType);
+      } else {
+        // Fallback to local fuzzy matching
+        return this.intelligentHeaderMapping(detectedHeaders, expectedHeaders, dataType);
+      }
     } catch (error) {
       console.error('Header mapping error:', error);
       // Fallback to simple fuzzy matching
       return this.fuzzyHeaderMapping(detectedHeaders, expectedHeaders);
     }
+  }
+
+  // Gemini AI Methods
+
+  // Gemini-powered search
+  private async geminiSearch(
+    query: string, 
+    data: (Client | Worker | Task)[], 
+    dataType: string
+  ): Promise<(Client | Worker | Task)[]> {
+    const prompt = `
+You are a data filtering AI. Given this natural language query: "${query}"
+
+Analyze the query and return a JSON object with filtering criteria for ${dataType} data:
+{
+  "filters": {
+    "priority": { "operator": "greater|less|equals", "value": number } | null,
+    "skills": ["skill1", "skill2"] | [],
+    "duration": { "operator": "greater|less|equals", "value": number } | null,
+    "keywords": ["keyword1", "keyword2"] | [],
+    "status": ["status1", "status2"] | []
+  }
+}
+
+Examples:
+- "high priority clients" → priority: {"operator": "greater", "value": 3}
+- "JavaScript developers" → skills: ["javascript", "js"]
+- "tasks longer than 3 days" → duration: {"operator": "greater", "value": 3}
+
+Only return the JSON object, no other text.`;
+
+    try {
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      let text = response.text();
+      
+      // Clean up the response - remove markdown code blocks if present
+      text = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      
+      console.log('Gemini search response:', text);
+      const filterCriteria = JSON.parse(text);
+      return this.applyGeminiFilters(data, filterCriteria.filters, dataType);
+    } catch (error) {
+      console.error('Gemini search error:', error);
+      // Fallback to local search
+      return this.localSearch(query, data, dataType);
+    }
+  }
+
+  // Gemini-powered error correction
+  private async geminiErrorCorrection(
+    errorType: string,
+    fieldName: string,
+    currentValue: any,
+    rowData: any
+  ): Promise<{ suggestions: string[], explanation: string }> {
+    const prompt = `
+You are a data validation expert. Analyze this validation error:
+
+Error Type: ${errorType}
+Field Name: ${fieldName}
+Current Value: ${currentValue}
+Row Context: ${JSON.stringify(rowData, null, 2)}
+
+Provide 3-5 specific correction suggestions and a clear explanation.
+Return JSON format:
+{
+  "suggestions": ["suggestion1", "suggestion2", "suggestion3"],
+  "explanation": "Clear explanation of the error and how to fix it"
+}
+
+Consider the context of the entire row and provide realistic, actionable suggestions.
+Only return the JSON object, no other text.`;
+
+    try {
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      let text = response.text();
+      
+      // Clean up the response - remove markdown code blocks if present
+      text = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      
+      console.log('Gemini error correction response:', text);
+      return JSON.parse(text);
+    } catch (error) {
+      console.error('Gemini error correction failed:', error);
+      return this.localErrorCorrection(errorType, fieldName, currentValue, rowData);
+    }
+  }
+
+  // Gemini-powered rule creation
+  private async geminiRuleCreation(
+    description: string,
+    availableData: any
+  ): Promise<{ rule: BusinessRule | null, explanation: string }> {
+    const prompt = `
+You are a business rule creation expert. Parse this natural language description into a business rule:
+
+Description: "${description}"
+
+Available data context:
+- Clients: ${availableData.clients.length} records
+- Workers: ${availableData.workers.length} records  
+- Tasks: ${availableData.tasks.length} records
+
+Create a business rule object. Return JSON format:
+{
+  "rule": {
+    "id": "rule_[timestamp]",
+    "type": "coRun|loadLimit|slotRestriction|phaseWindow|precedenceOverride",
+    "name": "Descriptive Rule Name",
+    "priority": 1-10,
+    "description": "What this rule does",
+    // Additional fields based on rule type
+  } | null,
+  "explanation": "Explanation of the created rule or why it couldn't be created"
+}
+
+Rule types:
+- coRun: Tasks that must run together
+- loadLimit: Worker capacity limits
+- slotRestriction: Client slot limitations
+- phaseWindow: Time-based constraints
+- precedenceOverride: Priority overrides
+
+Only return the JSON object, no other text.`;
+
+    try {
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      let text = response.text();
+      
+      // Clean up the response - remove markdown code blocks if present
+      text = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      
+      const parsed = JSON.parse(text);
+      if (parsed.rule) {
+        parsed.rule.id = `rule_${Date.now()}`;
+      }
+      return parsed;
+    } catch (error) {
+      console.error('Gemini rule creation failed:', error);
+      return this.localRuleCreation(description, availableData);
+    }
+  }
+
+  // Gemini-powered header mapping
+  private async geminiHeaderMapping(
+    detectedHeaders: string[],
+    expectedHeaders: string[],
+    dataType: string
+  ): Promise<{ [key: string]: string }> {
+    const prompt = `
+You are a data mapping expert. Map these detected headers to the expected schema:
+
+Detected Headers: ${JSON.stringify(detectedHeaders)}
+Expected Headers: ${JSON.stringify(expectedHeaders)}
+Data Type: ${dataType}
+
+Create a mapping object where each detected header maps to the most appropriate expected header.
+Consider synonyms, abbreviations, and domain knowledge for ${dataType} data.
+
+Return JSON format:
+{
+  "mapping": {
+    "detected_header1": "expected_header1",
+    "detected_header2": "expected_header2"
+  }
+}
+
+Common mappings:
+- client_id, clientid → ClientID
+- worker_name, emp_name → WorkerName
+- priority, importance → PriorityLevel
+- skills, capabilities → Skills
+
+Only return the JSON object, no other text.`;
+
+    try {
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      let text = response.text();
+      
+      // Clean up the response - remove markdown code blocks if present
+      text = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      
+      const parsed = JSON.parse(text);
+      return parsed.mapping || {};
+    } catch (error) {
+      console.error('Gemini header mapping failed:', error);
+      return this.intelligentHeaderMapping(detectedHeaders, expectedHeaders, dataType);
+    }
+  }
+
+  // Local/Fallback Methods
+
+  // Local search fallback
+  private localSearch(
+    query: string, 
+    data: (Client | Worker | Task)[], 
+    dataType: string
+  ): (Client | Worker | Task)[] {
+    // Extract search patterns from natural language query
+    const patterns = this.extractSearchPatterns(query, dataType);
+    
+    // Apply pattern-based filters
+    return this.applyPatternFilters(data, patterns, dataType);
+  }
+
+  // Local error correction fallback
+  private localErrorCorrection(
+    errorType: string,
+    fieldName: string,
+    currentValue: any,
+    rowData: any
+  ): { suggestions: string[], explanation: string } {
+    const suggestions = this.generateErrorSuggestions(errorType, fieldName, currentValue, rowData);
+    const explanation = this.getErrorExplanation(errorType, fieldName);
+    
+    return { suggestions, explanation };
+  }
+
+  // Local rule creation fallback
+  private localRuleCreation(
+    description: string,
+    availableData: any
+  ): { rule: BusinessRule | null, explanation: string } {
+    const rulePattern = this.analyzeRuleDescription(description);
+    const rule = this.createRuleFromPattern(rulePattern, availableData);
+    
+    return {
+      rule,
+      explanation: rule 
+        ? `Created ${rule.type} rule based on pattern recognition from: "${description}"`
+        : "Could not identify a clear rule pattern. Try phrases like 'tasks must run together', 'limit worker capacity', or 'client priority override'."
+    };
+  }
+
+  // Apply Gemini-generated filters
+  private applyGeminiFilters(data: any[], filters: any, dataType: string): any[] {
+    return data.filter(item => {
+      // Priority filtering
+      if (filters.priority && dataType === 'clients') {
+        const priority = item.PriorityLevel;
+        if (filters.priority.operator === 'greater' && priority <= filters.priority.value) return false;
+        if (filters.priority.operator === 'less' && priority >= filters.priority.value) return false;
+        if (filters.priority.operator === 'equals' && priority !== filters.priority.value) return false;
+      }
+
+      // Skills filtering
+      if (filters.skills?.length > 0 && (dataType === 'workers' || dataType === 'tasks')) {
+        const itemSkills = dataType === 'workers' ? item.Skills : item.RequiredSkills;
+        const hasMatchingSkill = filters.skills.some((skill: string) =>
+          itemSkills?.toLowerCase().includes(skill.toLowerCase())
+        );
+        if (!hasMatchingSkill) return false;
+      }
+
+      // Duration filtering
+      if (filters.duration && dataType === 'tasks') {
+        const duration = item.Duration;
+        if (filters.duration.operator === 'greater' && duration <= filters.duration.value) return false;
+        if (filters.duration.operator === 'less' && duration >= filters.duration.value) return false;
+        if (filters.duration.operator === 'equals' && duration !== filters.duration.value) return false;
+      }
+
+      // Keywords filtering
+      if (filters.keywords?.length > 0) {
+        const hasMatchingKeyword = filters.keywords.some((keyword: string) =>
+          Object.values(item).some(value =>
+            String(value).toLowerCase().includes(keyword.toLowerCase())
+          )
+        );
+        if (!hasMatchingKeyword) return false;
+      }
+
+      // Status filtering
+      if (filters.status?.length > 0) {
+        const itemStatus = item.Status || item.WorkerStatus || item.TaskStatus;
+        if (itemStatus && !filters.status.some((status: string) => 
+          itemStatus.toLowerCase().includes(status.toLowerCase()))) {
+          return false;
+        }
+      }
+
+      return true;
+    });
   }
 
   // Private helper methods for local AI functionality

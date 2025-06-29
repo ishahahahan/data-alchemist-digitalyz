@@ -1,0 +1,46 @@
+/* Custom styling for DataGrid rows */
+.ag-theme-alpine .ag-row.unsaved-row {
+  background-color: #fffbeb !important;
+  border-left: 3px solid #f59e0b !important;
+}
+
+.ag-theme-alpine .ag-row.error-row {
+  background-color: #fef2f2 !important;
+  border-left: 3px solid #ef4444 !important;
+}
+
+.ag-theme-alpine .ag-row.error-row.unsaved-row {
+  background-color: #fef2f2 !important;
+  border-left: 3px solid #ef4444 !important;
+  border-right: 3px solid #f59e0b !important;
+}
+
+/* Add animation for save button */
+.save-button-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Status message animations */
+.status-message {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

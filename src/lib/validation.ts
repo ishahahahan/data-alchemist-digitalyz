@@ -1,4 +1,5 @@
 import { Client, Worker, Task, ValidationResult, ValidationError, GroupedValidationError } from '@/types';
+import { CrossFileValidationEngine } from './crossFileValidation';
 
 export class ValidationEngine {
   private clients: Client[] = [];
@@ -16,16 +17,22 @@ export class ValidationEngine {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
-    // Run all validation rules
+    // Run basic validation rules
     errors.push(...this.validateMissingRequiredColumns());
     errors.push(...this.validateDuplicateIDs());
     errors.push(...this.validateMalformedLists());
     errors.push(...this.validateOutOfRange());
     errors.push(...this.validateBrokenJSON());
-    errors.push(...this.validateUnknownReferences());
     warnings.push(...this.validateOverloadedWorkers());
-    warnings.push(...this.validateSkillCoverage());
-    warnings.push(...this.validateMaxConcurrencyFeasibility());
+
+    // Run cross-file validation when multiple data sources are available
+    const crossFileValidator = new CrossFileValidationEngine(this.clients, this.workers, this.tasks);
+    const crossFileResults = crossFileValidator.validateAll();
+    
+    // Merge cross-file validation results
+    errors.push(...crossFileResults.errors);
+    warnings.push(...crossFileResults.warnings);
+    warnings.push(...crossFileResults.businessRuleViolations); // Treat business rule violations as warnings for now
 
     // Group errors by type
     const groupedErrors = this.groupValidationErrors(errors);

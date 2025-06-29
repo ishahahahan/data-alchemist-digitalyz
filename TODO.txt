@@ -1,0 +1,2 @@
+Proper AI implementation
+Inline editing validation check

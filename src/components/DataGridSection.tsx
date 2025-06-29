@@ -9,6 +9,7 @@ import { aiService } from '@/lib/aiService';
 import '@/lib/agGridSetup'; // Ensure AG Grid modules are registered
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
+import '@/styles/datagrid.css'; // Custom datagrid styling
 
 type DataType = 'clients' | 'workers' | 'tasks';
 
@@ -21,6 +22,8 @@ interface DataGridProps {
   onRequestAICorrection?: (rowIndex: number, fieldName: string, currentValue: any, errorType: string) => Promise<void>;
   errorRows?: Set<number>;
   getRowErrorDetails?: (rowIndex: number) => { errors: string[], warnings: string[] };
+  unsavedChanges?: Set<number>;
+  onMarkRowAsChanged?: (rowIndex: number) => void;
 }
 
 function DataGrid({ 
@@ -31,7 +34,9 @@ function DataGrid({
   aiSuggestions, 
   onRequestAICorrection,
   errorRows = new Set(),
-  getRowErrorDetails
+  getRowErrorDetails,
+  unsavedChanges = new Set(),
+  onMarkRowAsChanged
 }: DataGridProps) {
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
 
@@ -113,6 +118,11 @@ function DataGrid({
     const rowIndex = params.node.rowIndex;
     const updatedData = { ...params.data };
     onDataChange(rowIndex, updatedData);
+    
+    // Mark row as having unsaved changes
+    if (params.newValue !== params.oldValue) {
+      onMarkRowAsChanged?.(rowIndex);
+    }
   };
 
   const defaultColDef = useMemo(() => ({
@@ -122,14 +132,30 @@ function DataGrid({
     editable: false,
   }), []);
 
-  // Row styling based on validation errors
+  // Row styling based on validation errors and unsaved changes
   const getRowStyle = (params: RowClassParams): RowStyle | undefined => {
     const rowIndex = params.node.rowIndex;
-    if (rowIndex !== null && errorRows.has(rowIndex)) {
-      return { 
-        backgroundColor: '#fef2f2', 
-        borderLeft: '3px solid #ef4444' 
-      };
+    if (rowIndex !== null) {
+      const hasErrors = errorRows.has(rowIndex);
+      const hasUnsavedChanges = unsavedChanges.has(rowIndex);
+      
+      if (hasErrors && hasUnsavedChanges) {
+        return { 
+          backgroundColor: '#fef2f2', 
+          borderLeft: '3px solid #ef4444',
+          borderRight: '3px solid #f59e0b' // Orange for unsaved
+        };
+      } else if (hasErrors) {
+        return { 
+          backgroundColor: '#fef2f2', 
+          borderLeft: '3px solid #ef4444' 
+        };
+      } else if (hasUnsavedChanges) {
+        return { 
+          backgroundColor: '#fffbeb', 
+          borderLeft: '3px solid #f59e0b' 
+        };
+      }
     }
     return undefined;
   };
@@ -137,8 +163,15 @@ function DataGrid({
   // Row class styling
   const getRowClass = (params: RowClassParams): string => {
     const rowIndex = params.node.rowIndex;
-    if (rowIndex !== null && errorRows.has(rowIndex)) {
-      return 'error-row';
+    if (rowIndex !== null) {
+      const classes = [];
+      if (errorRows.has(rowIndex)) {
+        classes.push('error-row');
+      }
+      if (unsavedChanges.has(rowIndex)) {
+        classes.push('unsaved-row');
+      }
+      return classes.join(' ');
     }
     return '';
   };
@@ -175,6 +208,9 @@ export default function DataGridSection() {
   const [aiSuggestions, setAiSuggestions] = useState<{ [key: string]: any }>({});
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
+  const [unsavedChanges, setUnsavedChanges] = useState<Set<number>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   
   const { 
     clients, 
@@ -324,6 +360,9 @@ export default function DataGridSection() {
   };
 
   const handleDataChange = (index: number, updatedData: any) => {
+    // Mark row as having unsaved changes
+    setUnsavedChanges(prev => new Set([...prev, index]));
+    
     switch (activeDataType) {
       case 'clients':
         updateClient(index, updatedData as Client);
@@ -335,6 +374,99 @@ export default function DataGridSection() {
         updateTask(index, updatedData as Task);
         break;
     }
+  };
+
+  // Handle saving changes and re-validating data
+  const handleSaveChanges = async () => {
+    if (unsavedChanges.size === 0) return;
+    
+    setIsSaving(true);
+    setLastSaveStatus('');
+    
+    try {
+      // Get current data before validation
+      const currentData = getCurrentData();
+      const unsavedRowsArray = Array.from(unsavedChanges);
+      
+      // Run comprehensive validation (including cross-file validation)
+      const validationResult = getValidationErrors();
+      
+      // Check if any previously unsaved rows still have errors
+      const resolvedRows = new Set<number>();
+      const stillErrorRows = new Set<number>();
+      
+      unsavedRowsArray.forEach(rowIndex => {
+        let hasErrors = false;
+        
+        // Check if this row still has validation errors
+        (validationResult.groupedErrors || []).forEach(error => {
+          if (error.affectedRows.includes(rowIndex)) {
+            hasErrors = true;
+          }
+        });
+        
+        (validationResult.groupedWarnings || []).forEach(warning => {
+          if (warning.affectedRows.includes(rowIndex)) {
+            hasErrors = true;
+          }
+        });
+        
+        if (hasErrors) {
+          stillErrorRows.add(rowIndex);
+        } else {
+          resolvedRows.add(rowIndex);
+        }
+      });
+      
+      // Clear unsaved changes for all rows (they've been processed)
+      setUnsavedChanges(new Set());
+      
+      // Check for cross-file validation improvements
+      const totalErrors = (validationResult.groupedErrors || []).length;
+      const totalWarnings = (validationResult.groupedWarnings || []).length;
+      
+      // Update status message with cross-file validation context
+      const totalProcessed = unsavedRowsArray.length;
+      const resolvedCount = resolvedRows.size;
+      const stillErrorCount = stillErrorRows.size;
+      
+      let statusMessage = '';
+      
+      if (resolvedCount > 0 && stillErrorCount === 0) {
+        statusMessage = `✅ Saved ${totalProcessed} changes successfully! All validation errors resolved.`;
+        if (totalErrors === 0 && totalWarnings === 0) {
+          statusMessage += ' No cross-file validation issues detected.';
+        }
+      } else if (resolvedCount > 0 && stillErrorCount > 0) {
+        statusMessage = `⚠️ Saved ${totalProcessed} changes. ${resolvedCount} rows fixed, ${stillErrorCount} still have errors.`;
+      } else if (stillErrorCount > 0) {
+        statusMessage = `❌ Saved ${totalProcessed} changes, but all rows still have validation errors.`;
+      } else {
+        statusMessage = `✅ Saved ${totalProcessed} changes successfully!`;
+      }
+      
+      // Add cross-file validation summary
+      if (totalErrors > 0 || totalWarnings > 0) {
+        statusMessage += ` (${totalErrors} critical errors, ${totalWarnings} warnings detected across files)`;
+      }
+      
+      setLastSaveStatus(statusMessage);
+      
+      // Clear status after 7 seconds (longer for complex messages)
+      setTimeout(() => setLastSaveStatus(''), 7000);
+      
+    } catch (error) {
+      console.error('Save error:', error);
+      setLastSaveStatus('❌ Error saving changes. Please try again.');
+      setTimeout(() => setLastSaveStatus(''), 5000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Mark row as changed (called from DataGrid)
+  const handleMarkRowAsChanged = (rowIndex: number) => {
+    setUnsavedChanges(prev => new Set([...prev, rowIndex]));
   };
 
   const getDataTypeName = (type: DataType) => {
@@ -456,6 +588,32 @@ export default function DataGridSection() {
             </div>
             <div className="flex space-x-2">
               <button 
+                onClick={handleSaveChanges}
+                disabled={unsavedChanges.size === 0 || isSaving}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 flex items-center space-x-2 ${
+                  unsavedChanges.size > 0 && !isSaving
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg transform hover:scale-105'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                } ${unsavedChanges.size > 0 ? 'save-button-pulse' : ''}`}
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>💾</span>
+                    <span>Save Changes</span>
+                    {unsavedChanges.size > 0 && (
+                      <span className="px-2 py-1 text-xs bg-green-500 text-white rounded-full">
+                        {unsavedChanges.size}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+              <button 
                 onClick={onExport}
                 className="px-3 py-1 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100"
               >
@@ -524,6 +682,31 @@ export default function DataGridSection() {
             )}
           </div>
 
+          {/* Save Status Display */}
+          {lastSaveStatus && (
+            <div className={`status-message px-3 py-2 text-sm rounded-md ${
+              lastSaveStatus.includes('✅') 
+                ? 'bg-green-50 text-green-700 border border-green-200' 
+                : lastSaveStatus.includes('⚠️')
+                ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {lastSaveStatus}
+            </div>
+          )}
+
+          {/* Unsaved Changes Indicator */}
+          {unsavedChanges.size > 0 && (
+            <div className="flex items-center justify-between text-sm text-orange-700 bg-orange-50 px-3 py-2 rounded-md border border-orange-200">
+              <span>
+                ⚠️ You have {unsavedChanges.size} unsaved change{unsavedChanges.size !== 1 ? 's' : ''}
+              </span>
+              <span className="text-xs">
+                Click "Save Changes" to validate and apply changes
+              </span>
+            </div>
+          )}
+
           {/* Search Results Info */}
           {searchQuery && (
             <div className="flex items-center justify-between text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-md">
@@ -548,6 +731,8 @@ export default function DataGridSection() {
               onRequestAICorrection={handleAIErrorCorrection}
               errorRows={errorRows}
               getRowErrorDetails={getRowErrorDetails}
+              unsavedChanges={unsavedChanges}
+              onMarkRowAsChanged={handleMarkRowAsChanged}
             />
           ) : (
             <div className="text-center py-12">
@@ -565,14 +750,32 @@ export default function DataGridSection() {
 
       {/* Help Section */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-blue-900 mb-2">💡 Editing Tips</h4>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>• Double-click any cell to edit its value</li>
-          <li>• Use Tab or Enter to move between cells</li>
-          <li>• Right-click for context menu options</li>
-          <li>• Changes are automatically validated in real-time</li>
-          <li>• Invalid data will be highlighted in the validation panel</li>
-        </ul>
+        <h4 className="text-sm font-semibold text-blue-900 mb-2">💡 Advanced Validation & Editing Tips</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
+          <div>
+            <h5 className="font-semibold mb-1">Basic Editing:</h5>
+            <ul className="space-y-1">
+              <li>• Double-click any cell to edit its value</li>
+              <li>• Use Tab or Enter to move between cells</li>
+              <li>• Right-click for context menu options</li>
+              <li>• <strong>Orange-highlighted rows</strong> have unsaved changes</li>
+              <li>• <strong>Red-highlighted rows</strong> have validation errors</li>
+            </ul>
+          </div>
+          <div>
+            <h5 className="font-semibold mb-1">Cross-File Validation:</h5>
+            <ul className="space-y-1">
+              <li>• System checks task references between files</li>
+              <li>• Validates skill coverage and worker capacity</li>
+              <li>• Detects phase conflicts and resource overloads</li>
+              <li>• Identifies circular dependencies in business rules</li>
+              <li>• Click "Save Changes" to run comprehensive validation</li>
+            </ul>
+          </div>
+        </div>
+        <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-700">
+          <strong>🔍 Smart Detection:</strong> The system automatically detects unknown task references, skill gaps, capacity violations, and scheduling conflicts across all uploaded files.
+        </div>
       </div>
     </div>
   );
