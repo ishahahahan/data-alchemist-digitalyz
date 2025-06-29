@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridApi, GridReadyEvent, RowClassParams, RowStyle, RowEvent } from 'ag-grid-community';
+import { ColDef, GridApi, GridReadyEvent, RowClassParams, RowStyle } from 'ag-grid-community';
 import useAppStore from '@/store/useAppStore';
 import { Client, Worker, Task } from '@/types';
 import { aiService } from '@/lib/aiService';
@@ -15,13 +15,10 @@ type DataType = 'clients' | 'workers' | 'tasks';
 
 interface DataGridProps {
   dataType: DataType;
-  data: any[];
-  onDataChange: (index: number, updatedData: any) => void;
+  data: Record<string, unknown>[];
+  onDataChange: (index: number, updatedData: Record<string, unknown>) => void;
   onGridReady?: (params: GridReadyEvent) => void;
-  aiSuggestions?: { [key: string]: any };
-  onRequestAICorrection?: (rowIndex: number, fieldName: string, currentValue: any, errorType: string) => Promise<void>;
   errorRows?: Set<number>;
-  getRowErrorDetails?: (rowIndex: number) => { errors: string[], warnings: string[] };
   unsavedChanges?: Set<number>;
   onMarkRowAsChanged?: (rowIndex: number) => void;
 }
@@ -31,10 +28,7 @@ function DataGrid({
   data, 
   onDataChange, 
   onGridReady, 
-  aiSuggestions, 
-  onRequestAICorrection,
   errorRows = new Set(),
-  getRowErrorDetails,
   unsavedChanges = new Set(),
   onMarkRowAsChanged
 }: DataGridProps) {
@@ -204,13 +198,13 @@ export default function DataGridSection() {
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [filteredData, setFilteredData] = useState<any[]>([]);
-  const [aiSuggestions, setAiSuggestions] = useState<{ [key: string]: any }>({});
+  const [filteredData, setFilteredData] = useState<unknown[]>([]);
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
   const [unsavedChanges, setUnsavedChanges] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
+  const [selectedRowsCount, setSelectedRowsCount] = useState(0);
   
   const { 
     clients, 
@@ -253,7 +247,7 @@ export default function DataGridSection() {
     } finally {
       setIsSearching(false);
     }
-  }, [activeDataType]);
+  }, [activeDataType, clients.data, workers.data, tasks.data]);
 
   // Debounced search
   useEffect(() => {
@@ -268,34 +262,22 @@ export default function DataGridSection() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery, handleAISearch]);
 
-  // AI Error Correction
-  const handleAIErrorCorrection = useCallback(async (
-    rowIndex: number,
-    fieldName: string,
-    currentValue: any,
-    errorType: string
-  ) => {
-    try {
-      const currentData = getCurrentData();
-      const rowData = currentData[rowIndex];
-      const suggestions = await aiService.suggestErrorCorrection(
-        errorType,
-        rowData,
-        fieldName,
-        currentValue
-      );
-      
-      setAiSuggestions(prev => ({
-        ...prev,
-        [`${rowIndex}_${fieldName}`]: suggestions
-      }));
-    } catch (error) {
-      console.error('AI error correction failed:', error);
+  // Reset selection when data type changes
+  useEffect(() => {
+    setSelectedRowsCount(0);
+    if (gridApi) {
+      gridApi.deselectAll();
     }
-  }, [activeDataType]);
+  }, [activeDataType, gridApi]);
 
   const onGridReady = (params: GridReadyEvent) => {
     setGridApi(params.api);
+    
+    // Add selection change listener
+    params.api.addEventListener('selectionChanged', () => {
+      const selectedNodes = params.api.getSelectedNodes();
+      setSelectedRowsCount(selectedNodes.length);
+    });
   };
 
   const getCurrentData = () => {
@@ -340,7 +322,29 @@ export default function DataGridSection() {
     const selectedNodes = gridApi?.getSelectedNodes();
     if (!selectedNodes || selectedNodes.length === 0) return;
 
-    const selectedIds = selectedNodes.map(node => node.data.id);
+    // Show confirmation dialog
+    const entityType = activeDataType.charAt(0).toUpperCase() + activeDataType.slice(1);
+    const confirmMessage = `Are you sure you want to delete ${selectedNodes.length} ${entityType.toLowerCase()}${selectedNodes.length === 1 ? '' : 's'}?`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    // Extract the correct ID field based on data type
+    const selectedIds = selectedNodes.map(node => {
+      switch (activeDataType) {
+        case 'clients':
+          return node.data.ClientID;
+        case 'workers':
+          return node.data.WorkerID;
+        case 'tasks':
+          return node.data.TaskID;
+        default:
+          return null;
+      }
+    }).filter(id => id !== null);
+
+    if (selectedIds.length === 0) return;
 
     switch (activeDataType) {
       case 'clients':
@@ -353,6 +357,9 @@ export default function DataGridSection() {
         deleteTasks(selectedIds);
         break;
     }
+    
+    // Reset selection count after deletion
+    setSelectedRowsCount(0);
   };
 
   const onExport = () => {
@@ -385,7 +392,6 @@ export default function DataGridSection() {
     
     try {
       // Get current data before validation
-      const currentData = getCurrentData();
       const unsavedRowsArray = Array.from(unsavedChanges);
       
       // Run comprehensive validation (including cross-file validation)
@@ -397,7 +403,6 @@ export default function DataGridSection() {
       
       unsavedRowsArray.forEach(rowIndex => {
         let hasErrors = false;
-        let hasWarnings = false;
         
         // Check if this row still has validation errors
         (validationResult.groupedErrors || []).forEach(error => {
@@ -409,7 +414,7 @@ export default function DataGridSection() {
         // Check warnings separately - don't treat as blocking errors
         (validationResult.groupedWarnings || []).forEach(warning => {
           if (warning.affectedRows.includes(rowIndex)) {
-            hasWarnings = true;
+            // hasWarnings = true; // Just noting warnings exist but not using the flag
           }
         });
         
@@ -629,9 +634,19 @@ export default function DataGridSection() {
               </button>
               <button 
                 onClick={onDeleteSelected}
-                className="px-3 py-1 text-sm bg-red-50 text-red-700 rounded-md hover:bg-red-100"
+                disabled={selectedRowsCount === 0}
+                className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center space-x-1 ${
+                  selectedRowsCount > 0 
+                    ? 'bg-red-50 text-red-700 hover:bg-red-100 cursor-pointer' 
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
               >
-                Delete Selected
+                <span>Delete Selected</span>
+                {selectedRowsCount > 0 && (
+                  <span className="px-2 py-1 text-xs bg-red-500 text-white rounded-full">
+                    {selectedRowsCount}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -729,10 +744,7 @@ export default function DataGridSection() {
               data={searchQuery ? filteredData : currentData}
               onDataChange={handleDataChange}
               onGridReady={onGridReady}
-              aiSuggestions={aiSuggestions}
-              onRequestAICorrection={handleAIErrorCorrection}
               errorRows={errorRows}
-              getRowErrorDetails={getRowErrorDetails}
               unsavedChanges={unsavedChanges}
               onMarkRowAsChanged={handleMarkRowAsChanged}
             />
@@ -771,7 +783,7 @@ export default function DataGridSection() {
               <li>• Validates skill coverage and worker capacity</li>
               <li>• Detects phase conflicts and resource overloads</li>
               <li>• Identifies circular dependencies in business rules</li>
-              <li>• Click "Save Changes" to run comprehensive validation</li>
+              <li>• Click &quot;Save Changes&quot; to run comprehensive validation</li>
             </ul>
           </div>
         </div>

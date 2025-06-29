@@ -132,15 +132,21 @@ const useAppStore = create<AppStore>((set, get) => ({
     get()._updateValidation();
   },
 
-  addClient: (client: Client) =>
+  addClient: (client: Client) => {
     set((state) => ({
       clients: { ...state.clients, data: [...state.clients.data, client] },
-    })),
+    }));
+    // Trigger validation after adding data
+    get()._updateValidation();
+  },
 
-  deleteClients: (clientIds: string[]) =>
+  deleteClients: (clientIds: string[]) => {
     set((state) => ({
       clients: { ...state.clients, data: state.clients.data.filter(c => !clientIds.includes(c.ClientID)) },
-    })),
+    }));
+    // Trigger validation after deleting data
+    get()._updateValidation();
+  },
 
   // Worker actions
   setWorkersData: (data: Worker[]) =>
@@ -168,15 +174,21 @@ const useAppStore = create<AppStore>((set, get) => ({
     get()._updateValidation();
   },
 
-  addWorker: (worker: Worker) =>
+  addWorker: (worker: Worker) => {
     set((state) => ({
       workers: { ...state.workers, data: [...state.workers.data, worker] },
-    })),
+    }));
+    // Trigger validation after adding data
+    get()._updateValidation();
+  },
 
-  deleteWorkers: (workerIds: string[]) =>
+  deleteWorkers: (workerIds: string[]) => {
     set((state) => ({
       workers: { ...state.workers, data: state.workers.data.filter(w => !workerIds.includes(w.WorkerID)) },
-    })),
+    }));
+    // Trigger validation after deleting data
+    get()._updateValidation();
+  },
 
   // Task actions
   setTasksData: (data: Task[]) =>
@@ -204,15 +216,21 @@ const useAppStore = create<AppStore>((set, get) => ({
     get()._updateValidation();
   },
 
-  addTask: (task: Task) =>
+  addTask: (task: Task) => {
     set((state) => ({
       tasks: { ...state.tasks, data: [...state.tasks.data, task] },
-    })),
+    }));
+    // Trigger validation after adding data
+    get()._updateValidation();
+  },
 
-  deleteTasks: (taskIds: string[]) =>
+  deleteTasks: (taskIds: string[]) => {
     set((state) => ({
       tasks: { ...state.tasks, data: state.tasks.data.filter(t => !taskIds.includes(t.TaskID)) },
-    })),
+    }));
+    // Trigger validation after deleting data
+    get()._updateValidation();
+  },
 
   // Rule actions
   addRule: (rule: BusinessRule) =>
