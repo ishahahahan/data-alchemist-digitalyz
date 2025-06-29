@@ -397,6 +397,7 @@ export default function DataGridSection() {
       
       unsavedRowsArray.forEach(rowIndex => {
         let hasErrors = false;
+        let hasWarnings = false;
         
         // Check if this row still has validation errors
         (validationResult.groupedErrors || []).forEach(error => {
@@ -405,9 +406,10 @@ export default function DataGridSection() {
           }
         });
         
+        // Check warnings separately - don't treat as blocking errors
         (validationResult.groupedWarnings || []).forEach(warning => {
           if (warning.affectedRows.includes(rowIndex)) {
-            hasErrors = true;
+            hasWarnings = true;
           }
         });
         

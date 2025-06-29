@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { Client, Worker, Task, BusinessRule, AppState, FileUploadState, ValidationResult } from '@/types';
+import { ValidationEngine } from '@/lib/validation';
 
 interface AppStore extends AppState {
+  // Helper function to trigger validation
+  _updateValidation: () => void;
+  
   // Actions for clients
   setClientsData: (data: Client[]) => void;
   updateClientUploadState: (state: Partial<FileUploadState>) => void;
@@ -66,6 +70,42 @@ const useAppStore = create<AppStore>((set, get) => ({
     resourceEfficiency: 0.1,
   },
 
+  // Helper function to trigger validation after data changes
+  _updateValidation: () => {
+    const state = get();
+    const validationEngine = new ValidationEngine(
+      state.clients.data,
+      state.workers.data,
+      state.tasks.data
+    );
+    const validationResult = validationEngine.validateAll();
+
+    // Update validation results for all datasets
+    set((state) => ({
+      clients: {
+        ...state.clients,
+        uploadState: {
+          ...state.clients.uploadState,
+          validationResult
+        }
+      },
+      workers: {
+        ...state.workers,
+        uploadState: {
+          ...state.workers.uploadState,
+          validationResult
+        }
+      },
+      tasks: {
+        ...state.tasks,
+        uploadState: {
+          ...state.tasks.uploadState,
+          validationResult
+        }
+      }
+    }));
+  },
+
   // Client actions
   setClientsData: (data: Client[]) =>
     set((state) => ({
@@ -80,14 +120,17 @@ const useAppStore = create<AppStore>((set, get) => ({
       },
     })),
 
-  updateClient: (index: number, client: Client) =>
+  updateClient: (index: number, client: Client) => {
     set((state) => {
       const newData = [...state.clients.data];
       newData[index] = client;
       return {
         clients: { ...state.clients, data: newData },
       };
-    }),
+    });
+    // Trigger validation after updating data
+    get()._updateValidation();
+  },
 
   addClient: (client: Client) =>
     set((state) => ({
@@ -113,14 +156,17 @@ const useAppStore = create<AppStore>((set, get) => ({
       },
     })),
 
-  updateWorker: (index: number, worker: Worker) =>
+  updateWorker: (index: number, worker: Worker) => {
     set((state) => {
       const newData = [...state.workers.data];
       newData[index] = worker;
       return {
         workers: { ...state.workers, data: newData },
       };
-    }),
+    });
+    // Trigger validation after updating data
+    get()._updateValidation();
+  },
 
   addWorker: (worker: Worker) =>
     set((state) => ({
@@ -146,14 +192,17 @@ const useAppStore = create<AppStore>((set, get) => ({
       },
     })),
 
-  updateTask: (index: number, task: Task) =>
+  updateTask: (index: number, task: Task) => {
     set((state) => {
       const newData = [...state.tasks.data];
       newData[index] = task;
       return {
         tasks: { ...state.tasks, data: newData },
       };
-    }),
+    });
+    // Trigger validation after updating data
+    get()._updateValidation();
+  },
 
   addTask: (task: Task) =>
     set((state) => ({

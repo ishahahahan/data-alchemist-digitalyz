@@ -297,7 +297,7 @@ export default function RuleBuilderSection() {
                 <textarea
                   value={nlDescription}
                   onChange={(e) => setNlDescription(e.target.value)}
-                  className="w-full h-24 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full h-24 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-600"
                   placeholder="Example: 'Tasks T001 and T002 must run together in the same phase' or 'Marketing team can only handle 3 tasks per phase'"
                 />
               </div>

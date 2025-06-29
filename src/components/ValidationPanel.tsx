@@ -14,7 +14,10 @@ export default function ValidationPanel() {
     const validationResult = useMemo(() => getValidationErrors(), [
         clients.uploadState.validationResult,
         workers.uploadState.validationResult,
-        tasks.uploadState.validationResult
+        tasks.uploadState.validationResult,
+        clients.data,
+        workers.data,
+        tasks.data
     ]);
     const hasData = clients.data.length > 0 || workers.data.length > 0 || tasks.data.length > 0;
 
@@ -233,8 +236,8 @@ export default function ValidationPanel() {
                                                 <div className="mt-2 p-2 bg-yellow-100 rounded border-l-4 border-yellow-400">
                                                     <div className="text-xs font-semibold text-yellow-800 mb-1">📊 Capacity Issues:</div>
                                                     <div className="space-y-1 text-xs text-yellow-700">
-                                                        {capacityWarnings.map(warning => (
-                                                            <div key={warning.type} className="flex justify-between">
+                                                        {capacityWarnings.map((warning, idx) => (
+                                                            <div key={`capacity-${warning.type}-${idx}`} className="flex justify-between">
                                                                 <span>{warning.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</span>
                                                                 <span className="font-semibold">{warning.count}</span>
                                                             </div>
@@ -276,7 +279,7 @@ export default function ValidationPanel() {
                             {expandedSections.has('errors') && (
                                 <div className="p-4 space-y-3">
                                     {(validationResult.groupedErrors || []).map((error: GroupedValidationError, index: number) => (
-                                        <div key={index} className="bg-white border border-red-200 rounded-lg p-3">
+                                        <div key={`error-${error.type}-${index}`} className="bg-white border border-red-200 rounded-lg p-3">
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-red-900">{error.message}</p>
@@ -314,39 +317,39 @@ export default function ValidationPanel() {
                                                 </div>
                                                 <div className="ml-4">
                                                     <button
-                                                        onClick={() => handleGetAISuggestions(error, `error-${index}`)}
+                                                        onClick={() => handleGetAISuggestions(error, `error-${error.type}-${index}`)}
                                                         className="px-3 py-1 text-xs font-medium rounded-full transition-all flex items-center justify-center
                             bg-blue-50 text-blue-700 hover:bg-blue-100"
                                                     >
-                                                        {loadingSuggestions.has(`error-${index}`) ? 'Loading...' : 'AI Suggestions'}
+                                                        {loadingSuggestions.has(`error-${error.type}-${index}`) ? 'Loading...' : 'AI Suggestions'}
                                                     </button>
                                                 </div>
                                             </div>
-                                            {aiSuggestions[`error-${index}`] && (
+                                            {aiSuggestions[`error-${error.type}-${index}`] && (
                                                 <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
                                                     <p className="font-medium text-blue-900">AI Suggestions:</p>
-                                                    {aiSuggestions[`error-${index}`].errorContext && (
+                                                    {aiSuggestions[`error-${error.type}-${index}`].errorContext && (
                                                         <div className="mb-2 text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                                                            <strong>Context:</strong> {aiSuggestions[`error-${index}`].errorContext.dataType} data, 
-                                                            field "{aiSuggestions[`error-${index}`].errorContext.fieldName}", 
-                                                            row {aiSuggestions[`error-${index}`].errorContext.rowIndex + 1}
-                                                            {aiSuggestions[`error-${index}`].errorContext.currentValue !== null && (
-                                                                <span> (current: "{String(aiSuggestions[`error-${index}`].errorContext.currentValue)}")</span>
+                                                            <strong>Context:</strong> {aiSuggestions[`error-${error.type}-${index}`].errorContext.dataType} data, 
+                                                            field "{aiSuggestions[`error-${error.type}-${index}`].errorContext.fieldName}", 
+                                                            row {aiSuggestions[`error-${error.type}-${index}`].errorContext.rowIndex + 1}
+                                                            {aiSuggestions[`error-${error.type}-${index}`].errorContext.currentValue !== null && (
+                                                                <span> (current: "{String(aiSuggestions[`error-${error.type}-${index}`].errorContext.currentValue)}")</span>
                                                             )}
                                                         </div>
                                                     )}
-                                                    {aiSuggestions[`error-${index}`].suggestions.length > 0 ? (
+                                                    {aiSuggestions[`error-${error.type}-${index}`].suggestions.length > 0 ? (
                                                         <ul className="list-disc list-inside space-y-1">
-                                                            {aiSuggestions[`error-${index}`].suggestions.map((suggestion: string, idx: number) => (
+                                                            {aiSuggestions[`error-${error.type}-${index}`].suggestions.map((suggestion: string, idx: number) => (
                                                                 <li key={idx} className="text-blue-800">{suggestion}</li>
                                                             ))}
                                                         </ul>
                                                     ) : (
                                                         <p className="text-blue-700 italic">No specific suggestions available for this error type.</p>
                                                     )}
-                                                    {aiSuggestions[`error-${index}`].explanation && (
+                                                    {aiSuggestions[`error-${error.type}-${index}`].explanation && (
                                                         <p className="text-blue-700 italic mt-2 border-t border-blue-200 pt-2">
-                                                            <strong>Explanation:</strong> {aiSuggestions[`error-${index}`].explanation}
+                                                            <strong>Explanation:</strong> {aiSuggestions[`error-${error.type}-${index}`].explanation}
                                                         </p>
                                                     )}
                                                 </div>
@@ -380,7 +383,7 @@ export default function ValidationPanel() {
                             {expandedSections.has('warnings') && (
                                 <div className="p-4 space-y-3">
                                     {(validationResult.groupedWarnings || []).map((warning: GroupedValidationError, index: number) => (
-                                        <div key={index} className="bg-white border border-yellow-200 rounded-lg p-3">
+                                        <div key={`warning-${warning.type}-${index}`} className="bg-white border border-yellow-200 rounded-lg p-3">
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-yellow-900">{warning.message}</p>
