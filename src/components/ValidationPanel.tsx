@@ -297,7 +297,7 @@ export default function ValidationPanel() {
                                                         )}
                                                         {error.affectedRows.length > 0 && (
                                                             <div className="mt-1">
-                                                                <span className="font-medium">Affected Rows:</span> {error.affectedRows.slice(0, 10).join(', ')}
+                                                                <span className="font-medium">Affected Rows:</span> {error.affectedRows.slice(1, 11).join(', ')}
                                                                 {error.affectedRows.length > 10 && (
                                                                     <span className="text-red-500"> ... and {error.affectedRows.length - 10} more</span>
                                                                 )}
