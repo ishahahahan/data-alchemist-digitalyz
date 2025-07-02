@@ -206,19 +206,3 @@ src/
 ├── store/                  # Zustand state management
 └── types/                  # TypeScript definitions
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/name`
-3. Make your changes and test with `npm run build`
-4. Commit: `git commit -m 'feat: description'`
-5. Push and create a Pull Request
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-**Transform your spreadsheet data into clean, validated datasets with AI-powered assistance.**
