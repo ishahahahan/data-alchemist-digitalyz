@@ -11,6 +11,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@types/papaparse": "^5.3.16",
+    "@vercel/analytics": "^1.5.0",
     "ag-grid-community": "^34.0.0",
     "ag-grid-react": "^34.0.0",
     "fuzzball": "^2.2.2",
